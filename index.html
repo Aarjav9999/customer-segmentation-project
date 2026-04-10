@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Customer Segmentation — AI Analyzer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+  <!-- ── HEADER ── -->
+  <header>
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">◈</span>
+        <span>SegmentIQ</span>
+      </div>
+      <p class="tagline">K-Means Customer Intelligence</p>
+    </div>
+    <div class="grid-overlay"></div>
+  </header>
+
+  <main>
+
+    <!-- ── INPUT PANEL ── -->
+    <section class="input-panel card">
+      <h2>Analyze a Customer</h2>
+      <p class="section-sub">Enter customer attributes to identify their segment.</p>
+
+      <div class="form-group">
+        <label for="age">Age <span class="range-hint">18 – 70</span></label>
+        <div class="slider-row">
+          <input type="range" id="age-slider" min="18" max="70" value="30" oninput="sync('age','age-slider')">
+          <input type="number" id="age" min="18" max="70" value="30" oninput="sync('age-slider','age')">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="income">Annual Income <span class="range-hint">k$ · 15 – 137</span></label>
+        <div class="slider-row">
+          <input type="range" id="income-slider" min="15" max="137" value="60" oninput="sync('income','income-slider')">
+          <input type="number" id="income" min="15" max="137" value="60" oninput="sync('income-slider','income')">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="score">Spending Score <span class="range-hint">1 – 100</span></label>
+        <div class="slider-row">
+          <input type="range" id="score-slider" min="1" max="100" value="50" oninput="sync('score','score-slider')">
+          <input type="number" id="score" min="1" max="100" value="50" oninput="sync('score-slider','score')">
+        </div>
+      </div>
+
+      <button class="btn-predict" id="predictBtn" onclick="predict()">
+        <span id="btn-label">Classify Customer →</span>
+      </button>
+
+      <div id="error-msg" class="error-msg" style="display:none"></div>
+    </section>
+
+    <!-- ── RESULT PANEL ── -->
+    <section id="result-section" class="result-panel card hidden">
+      <div id="result-header" class="result-header">
+        <div class="result-icon" id="result-icon">🎯</div>
+        <div>
+          <div class="result-tag" id="result-tag">High Value</div>
+          <div class="result-name" id="result-name">Target Customers</div>
+          <div class="cluster-id" id="cluster-id">Cluster 1</div>
+        </div>
+      </div>
+      <p class="result-desc" id="result-desc">Description here.</p>
+      <div class="strategy-box">
+        <span class="strategy-label">💡 Strategy</span>
+        <p id="result-strategy">Strategy here.</p>
+      </div>
+    </section>
+
+    <!-- ── CHARTS ── -->
+    <section class="charts-section">
+      <div class="chart-card card">
+        <h3>Income vs Spending Score</h3>
+        <img id="plot-2d" src="data:image/png;base64,{{ plot_2d }}" alt="2D Cluster Plot" />
+      </div>
+      <div class="chart-card card">
+        <h3>3D Segment View</h3>
+        <img id="plot-3d" src="data:image/png;base64,{{ plot_3d }}" alt="3D Cluster Plot" />
+      </div>
+    </section>
+
+    <!-- ── CLUSTER LEGEND ── -->
+    <section class="legend-section">
+      <h2>Segment Profiles</h2>
+      <div class="legend-grid">
+        {% for cid, p in profiles.items() %}
+        <div class="legend-card" style="--accent: {{ p.color }}">
+          <div class="legend-icon">{{ p.icon }}</div>
+          <div class="legend-tag" style="color:{{ p.color }}">{{ p.tag }}</div>
+          <div class="legend-name">{{ p.name }}</div>
+          <p class="legend-desc">{{ p.description }}</p>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <p>Built with Flask · scikit-learn · Matplotlib &nbsp;|&nbsp; K-Means k=5</p>
+  </footer>
+
+  <script>
+    // Sync slider ↔ number input
+    function sync(targetId, sourceId) {
+      document.getElementById(targetId).value = document.getElementById(sourceId).value;
+    }
+
+    async function predict() {
+      const btn = document.getElementById('predictBtn');
+      const label = document.getElementById('btn-label');
+      const errBox = document.getElementById('error-msg');
+
+      const age    = parseFloat(document.getElementById('age').value);
+      const income = parseFloat(document.getElementById('income').value);
+      const score  = parseFloat(document.getElementById('score').value);
+
+      btn.disabled = true;
+      label.textContent = 'Analyzing…';
+      errBox.style.display = 'none';
+
+      try {
+        const resp = await fetch('/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ age, income, score })
+        });
+
+        const data = await resp.json();
+
+        if (data.error) {
+          errBox.textContent = '⚠ ' + data.error;
+          errBox.style.display = 'block';
+          return;
+        }
+
+        // Update result card
+        const p = data.profile;
+        document.getElementById('result-icon').textContent = p.icon;
+        document.getElementById('result-tag').textContent  = p.tag;
+        document.getElementById('result-name').textContent = p.name;
+        document.getElementById('cluster-id').textContent  = `Cluster ${data.cluster}`;
+        document.getElementById('result-desc').textContent = p.description;
+        document.getElementById('result-strategy').textContent = p.strategy;
+        document.getElementById('result-header').style.borderColor = p.color;
+        document.getElementById('result-tag').style.color = p.color;
+
+        // Update charts
+        document.getElementById('plot-2d').src = 'data:image/png;base64,' + data.plot_2d;
+        document.getElementById('plot-3d').src = 'data:image/png;base64,' + data.plot_3d;
+
+        // Show result
+        const rs = document.getElementById('result-section');
+        rs.classList.remove('hidden');
+        rs.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+      } catch (e) {
+        errBox.textContent = '⚠ Network error. Is the server running?';
+        errBox.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        label.textContent = 'Classify Customer →';
+      }
+    }
+  </script>
+</body>
+</html>
